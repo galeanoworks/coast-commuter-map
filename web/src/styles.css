@@ -190,8 +190,11 @@ h1 {
   .seg { width: 100%; }
   .seg button { flex: 1 1 50%; border-bottom: 1px solid var(--ink); padding: 9px 8px; font-size: 13.5px; }
   .seg button:nth-child(2n) { border-right: 0; }
-  .seg button:nth-last-child(-n + 2) { border-bottom: 0; }
+  .seg button:last-child { flex-basis: 100%; border-bottom: 0; border-right: 0; }
   .top { gap: 12px; padding-top: 20px; }
   .brand img { width: 36px; height: 36px; }
   .legend .legend-row:nth-last-child(-n + 2) { display: none; }
 }
+.chart .ax.lab { font-size: 11.5px; fill: var(--ink); font-weight: 600; }
+.chart .ax.val { font-size: 11.5px; fill: var(--ink); font-weight: 700; }
+.detail .chart { margin-top: 14px; }

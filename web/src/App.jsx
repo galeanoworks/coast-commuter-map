@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
-import { C, METRICS, YEARS, colorFor, fillExpression, fmtEur, fmtPct } from './metrics.js';
+import { C, FIND, METRICS, YEARS, colorFor, fillExpression, fits, fmtEur, fmtPct } from './metrics.js';
+import { T, initialLang, rememberLang } from './i18n.js';
 
 const DATA = './data/';
+const BCN = [2.172, 41.414];
+const SEA = [1.93, 41.205];
 
 // ---------- data ----------
 function useData() {
@@ -23,10 +26,42 @@ function useData() {
 }
 
 // ---------- map ----------
-function MapView({ data, metric, year, selected, onSelect }) {
+class NorthArrow {
+  constructor(label) {
+    this.label = label;
+  }
+  onAdd() {
+    const el = document.createElement('div');
+    el.className = 'maplibregl-ctrl north';
+    el.setAttribute('role', 'img');
+    el.setAttribute('aria-label', this.label);
+    el.innerHTML =
+      '<svg viewBox="0 0 24 40" width="18" height="30" aria-hidden="true">' +
+      '<text x="12" y="9" text-anchor="middle">N</text>' +
+      '<path d="M12 13 L17 33 L12 29.5 Z" fill="currentColor"/>' +
+      '<path d="M12 13 L7 33 L12 29.5 Z" fill="none" stroke="currentColor" stroke-width="1"/>' +
+      '</svg>';
+    this.el = el;
+    return el;
+  }
+  onRemove() {
+    this.el.remove();
+  }
+}
+
+function label(map, lngLat, cls, text) {
+  const el = document.createElement('div');
+  el.className = cls;
+  el.textContent = text;
+  return new maplibregl.Marker({ element: el, anchor: 'center' }).setLngLat(lngLat).addTo(map);
+}
+
+function MapView({ data, metric, year, selected, onSelect, lang, dimmed, filtering }) {
+  const t = T[lang];
   const box = useRef(null);
   const mapRef = useRef(null);
   const tipRef = useRef(null);
+  const seaRef = useRef(null);
   const selectRef = useRef(onSelect);
   selectRef.current = onSelect;
 
@@ -43,32 +78,43 @@ function MapView({ data, metric, year, selected, onSelect }) {
           stations: { type: 'geojson', data: data.stations, promoteId: 'stop_id' },
         },
         layers: [
-          { id: 'sea', type: 'background', paint: { 'background-color': C.bg } },
-          { id: 'context', type: 'fill', source: 'context', paint: { 'fill-color': C.land, 'fill-outline-color': C.bg } },
-          { id: 'towns-fill', type: 'fill', source: 'towns', paint: { 'fill-color': fillExpression(metric, year) } },
-          { id: 'towns-edge', type: 'line', source: 'towns', paint: { 'line-color': C.bg, 'line-width': 1.2 } },
+          { id: 'sea', type: 'background', paint: { 'background-color': C.sea } },
+          { id: 'context', type: 'fill', source: 'context', paint: { 'fill-color': C.paper } },
+          { id: 'context-edge', type: 'line', source: 'context', paint: { 'line-color': '#dcdbd5', 'line-width': 0.5 } },
+          {
+            id: 'towns-fill',
+            type: 'fill',
+            source: 'towns',
+            paint: {
+              'fill-color': fillExpression(metric, year),
+              'fill-opacity': ['case', ['boolean', ['feature-state', 'dim'], false], 0.16, 1],
+              'fill-opacity-transition': { duration: 250 },
+            },
+          },
+          { id: 'towns-edge', type: 'line', source: 'towns', paint: { 'line-color': C.paper, 'line-width': 1 } },
           {
             id: 'towns-hover',
             type: 'line',
             source: 'towns',
-            paint: { 'line-color': C.ink, 'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 1.5, 0] },
+            paint: { 'line-color': C.ink, 'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 1, 0] },
           },
           {
             id: 'towns-selected',
             type: 'line',
             source: 'towns',
-            paint: { 'line-color': C.ink, 'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 3, 0] },
+            paint: { 'line-color': C.ink, 'line-width': ['case', ['boolean', ['feature-state', 'selected'], false], 2, 0] },
           },
-          { id: 'line', type: 'line', source: 'line', paint: { 'line-color': C.ink, 'line-width': 2 } },
+          { id: 'line-casing', type: 'line', source: 'line', paint: { 'line-color': C.paper, 'line-width': 4.5 } },
+          { id: 'line', type: 'line', source: 'line', paint: { 'line-color': C.ink, 'line-width': 1.4 } },
           {
             id: 'stations',
             type: 'circle',
             source: 'stations',
             paint: {
-              'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, 3.5, 12, 6],
-              'circle-color': C.bg,
+              'circle-radius': ['interpolate', ['linear'], ['zoom'], 9, ['case', ['==', ['get', 'stop_name'], 'Barcelona-Sants'], 4.5, 3], 12, ['case', ['==', ['get', 'stop_name'], 'Barcelona-Sants'], 7, 5]],
+              'circle-color': ['case', ['==', ['get', 'stop_name'], 'Barcelona-Sants'], C.ink, C.paper],
               'circle-stroke-color': C.ink,
-              'circle-stroke-width': 1.6,
+              'circle-stroke-width': 1.2,
             },
           },
         ],
@@ -77,25 +123,49 @@ function MapView({ data, metric, year, selected, onSelect }) {
         [1.47, 41.165],
         [2.235, 41.475],
       ],
-      fitBoundsOptions: { padding: { top: 24, bottom: 24, left: 24, right: 56 } },
+      fitBoundsOptions: { padding: { top: 24, bottom: 24, left: 24, right: 40 } },
       attributionControl: false,
       dragRotate: false,
       pitchWithRotate: false,
     });
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 90, unit: 'metric' }), 'bottom-right');
+    map.addControl(new NorthArrow(t.north), 'bottom-right');
     mapRef.current = map;
-    const zoomClass = () => box.current && box.current.classList.toggle('far', map.getZoom() < 9.2);
+    // town names appear once the reader zooms in from the opening view
+    let base = null;
+    const zoomClass = () => {
+      if (!box.current) return;
+      if (base === null) base = map.getZoom();
+      const z = map.getZoom();
+      box.current.classList.toggle('far', z < 9.1);
+      box.current.classList.toggle('near', z >= Math.max(base + 0.6, 10.2));
+    };
     map.on('zoom', zoomClass);
     map.on('load', zoomClass);
 
     // station badges: minutes to Sants
     data.stations.features.forEach((f) => {
+      if (f.properties.stop_name === 'Barcelona-Sants') return;
       const el = document.createElement('div');
       el.className = 'badge';
-      el.textContent = f.properties.stop_name === 'Barcelona-Sants' ? 'Sants' : `${f.properties.min_to_sants}′`;
-      new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -7] }).setLngLat(f.geometry.coordinates).addTo(map);
+      el.textContent = `${f.properties.min_to_sants}′`;
+      new maplibregl.Marker({ element: el, anchor: 'bottom', offset: [0, -6] }).setLngLat(f.geometry.coordinates).addTo(map);
     });
+    // town names when zoomed in; Barcelona always
+    data.towns.features.forEach((f) => {
+      const p = f.properties;
+      if (p.name === 'Barcelona') return;
+      label(map, [p.lx, p.ly], 'place', p.name);
+    });
+    label(map, BCN, 'place city', 'Barcelona');
+    const sants = document.createElement('div');
+    sants.className = 'place sants';
+    sants.textContent = 'Sants';
+    const s = data.stations.features.find((f) => f.properties.stop_name === 'Barcelona-Sants');
+    if (s) new maplibregl.Marker({ element: sants, anchor: 'left', offset: [9, 0] }).setLngLat(s.geometry.coordinates).addTo(map);
+    seaRef.current = label(map, SEA, 'place sea', t.sea);
 
     let hover = null;
     const tip = tipRef.current;
@@ -105,9 +175,10 @@ function MapView({ data, metric, year, selected, onSelect }) {
       hover = f.id;
       map.setFeatureState({ source: 'towns', id: hover }, { hover: true });
       map.getCanvas().style.cursor = 'pointer';
-      tip.dataset.id = f.id;
       tip.style.display = 'block';
-      tip.style.left = e.point.x + 14 + 'px';
+      const w = box.current.clientWidth;
+      const left = e.point.x + 14;
+      tip.style.left = (left + 200 > w ? e.point.x - 14 - tip.offsetWidth : left) + 'px';
       tip.style.top = e.point.y + 14 + 'px';
       tip.dispatchEvent(new CustomEvent('town', { detail: f.id }));
     });
@@ -121,43 +192,61 @@ function MapView({ data, metric, year, selected, onSelect }) {
     map.on('click', (e) => {
       const st = map.queryRenderedFeatures(e.point, { layers: ['stations'] })[0];
       if (st) return selectRef.current(st.properties.muni_code || null, st.properties.stop_id);
-      const t = map.queryRenderedFeatures(e.point, { layers: ['towns-fill'] })[0];
-      selectRef.current(t ? t.id : null, null);
+      const tf = map.queryRenderedFeatures(e.point, { layers: ['towns-fill'] })[0];
+      selectRef.current(tf ? tf.id : null, null);
     });
     return () => map.remove();
   }, [data]);
 
-  // recolor on metric / year
-  useEffect(() => {
+  const whenReady = (fn) => {
     const map = mapRef.current;
     if (!map) return;
-    const apply = () => map.setPaintProperty('towns-fill', 'fill-color', fillExpression(metric, year));
-    map.isStyleLoaded() ? apply() : map.once('load', apply);
-  }, [metric, year]);
+    map.isStyleLoaded() ? fn(map) : map.once('load', () => fn(map));
+  };
+
+  // recolor on metric / year
+  useEffect(() => whenReady((map) => map.setPaintProperty('towns-fill', 'fill-color', fillExpression(metric, year))), [metric, year]);
+
+  // finder: fade towns outside the filters
+  useEffect(
+    () =>
+      whenReady((map) =>
+        data.towns.features.forEach((f) => map.setFeatureState({ source: 'towns', id: f.properties.muni5 }, { dim: dimmed.has(f.properties.muni5) }))
+      ),
+    [dimmed]
+  );
+
+  // language-dependent map text
+  useEffect(() => {
+    if (seaRef.current) seaRef.current.getElement().textContent = t.sea;
+  }, [lang]);
 
   // selected outline
   const prevSel = useRef(null);
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
-    const apply = () => {
-      if (prevSel.current) map.setFeatureState({ source: 'towns', id: prevSel.current }, { selected: false });
-      if (selected) map.setFeatureState({ source: 'towns', id: selected }, { selected: true });
-      prevSel.current = selected;
-    };
-    map.isStyleLoaded() ? apply() : map.once('load', apply);
-  }, [selected]);
+  useEffect(
+    () =>
+      whenReady((map) => {
+        if (prevSel.current) map.setFeatureState({ source: 'towns', id: prevSel.current }, { selected: false });
+        if (selected) map.setFeatureState({ source: 'towns', id: selected }, { selected: true });
+        prevSel.current = selected;
+      }),
+    [selected]
+  );
 
   return (
     <div className="map-wrap">
-      <div ref={box} className="map" aria-label="Map of the R2 Sud corridor" />
-      <Tooltip tipRef={tipRef} data={data} metric={metric} year={year} />
-      <Legend metric={metric} />
+      <div ref={box} className="map" aria-label={t.mapLabel} />
+      <Tooltip tipRef={tipRef} data={data} metric={metric} year={year} lang={lang} />
+      <Legend metric={metric} lang={lang} filtering={filtering} />
+      <div className="watermark" aria-hidden="true">
+        <img src="./gW.png" alt="" width="18" height="18" />
+        <span>galeanoworks.com</span>
+      </div>
     </div>
   );
 }
 
-function Tooltip({ tipRef, data, metric, year }) {
+function Tooltip({ tipRef, data, metric, year, lang }) {
   const [id, setId] = useState(null);
   useEffect(() => {
     const el = tipRef.current;
@@ -165,8 +254,9 @@ function Tooltip({ tipRef, data, metric, year }) {
     el.addEventListener('town', h);
     return () => el.removeEventListener('town', h);
   }, []);
-  const f = data && id ? data.towns.features.find((t) => t.properties.muni5 === id) : null;
+  const f = data && id ? data.towns.features.find((x) => x.properties.muni5 === id) : null;
   const m = METRICS[metric];
+  const tm = T[lang].metrics[metric];
   const v = f ? f.properties[m.field(year)] : null;
   return (
     <div ref={tipRef} className="tip" style={{ display: 'none' }}>
@@ -174,8 +264,8 @@ function Tooltip({ tipRef, data, metric, year }) {
         <>
           <b>{f.properties.name}</b>
           <span>
-            {m.short}
-            {m.byYear ? `, ${year}` : ''}: {v == null ? 'no data' : m.fmt(v)}
+            {tm.short}
+            {m.byYear ? `, ${year}` : ''}: <strong>{v == null ? T[lang].noData : m.fmt(v, lang)}</strong>
           </span>
         </>
       )}
@@ -183,83 +273,166 @@ function Tooltip({ tipRef, data, metric, year }) {
   );
 }
 
-function Legend({ metric }) {
+function Legend({ metric, lang, filtering }) {
   const m = METRICS[metric];
+  const t = T[lang];
   return (
     <div className="legend">
-      <div className="legend-title">{m.short}</div>
-      {m.legend.map((l, i) => (
-        <div key={l} className="legend-row">
-          <i style={{ background: m.colors[i] }} />
-          {l}
-        </div>
-      ))}
-      <div className="legend-row">
-        <i className="legend-line" />
-        Rodalies R2 Sud
+      <div className="legend-title">
+        {t.metrics[metric].short}
       </div>
-      <div className="legend-row">
-        <i className="legend-dot" />
-        Station, minutes to Sants
+      <div className="ramp">
+        {m.colors.map((c) => (
+          <i key={c} style={{ background: c }} />
+        ))}
       </div>
+      <div className="ramp-ticks">
+        {m.breaks.map((b, i) => (
+          <span key={b} style={{ left: `${((i + 1) / m.colors.length) * 100}%` }}>
+            {m.tick(b, lang)}
+          </span>
+        ))}
+      </div>
+      <div className="legend-keys">
+        <span>
+          <i className="k-line" />
+          {t.legendLine}
+        </span>
+        <span>
+          <i className="k-dot" />
+          {t.legendStation}
+        </span>
+      </div>
+      {filtering && <div className="legend-dim">{t.legendDim}</div>}
     </div>
   );
 }
 
+// ---------- finder ----------
+function Finder({ towns, find, setFind, matches, onSelect, selected, lang }) {
+  const t = T[lang];
+  const anyRent = find.rent >= FIND.rentMax;
+  const anyTime = find.minutes >= FIND.minMax;
+  const active = !anyRent || !anyTime || find.frequent;
+  const list = towns
+    .map((f) => f.properties)
+    .filter((p) => matches.has(p.muni5))
+    .sort((a, b) => a.rent_2024 - b.rent_2024);
+  return (
+    <section className="finder" aria-labelledby="finder-title">
+      <div className="finder-head">
+        <h2 id="finder-title">{t.findTitle}</h2>
+        {active && (
+          <button type="button" className="link" onClick={() => setFind({ rent: FIND.rentMax, minutes: FIND.minMax, frequent: false })}>
+            {t.reset}
+          </button>
+        )}
+      </div>
+      <label className="range">
+        <span>{t.findRent(anyRent ? null : fmtEur(find.rent, lang))}</span>
+        <input
+          type="range"
+          min={FIND.rentMin}
+          max={FIND.rentMax}
+          step={FIND.rentStep}
+          value={find.rent}
+          onChange={(e) => setFind({ ...find, rent: +e.target.value })}
+        />
+      </label>
+      <label className="range">
+        <span>{t.findMin(anyTime ? null : find.minutes)}</span>
+        <input
+          type="range"
+          min={FIND.minMin}
+          max={FIND.minMax}
+          step={FIND.minStep}
+          value={find.minutes}
+          onChange={(e) => setFind({ ...find, minutes: +e.target.value })}
+        />
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={find.frequent} onChange={(e) => setFind({ ...find, frequent: e.target.checked })} />
+        <span>{t.findFreq}</span>
+      </label>
+      <p className="count" aria-live="polite">
+        {t.findCount(matches.size, towns.length)}
+      </p>
+      {active && list.length > 0 && (
+        <ul className="matches">
+          {list.map((p) => (
+            <li key={p.muni5}>
+              <button type="button" aria-pressed={selected === p.muni5} onClick={() => onSelect(p.muni5, null)}>
+                <b>{p.name}</b>
+                <span>
+                  {fmtEur(p.rent_2024, lang)}
+                  {p.min_to_sants ? ` · ${p.min_to_sants} min` : ''}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="fine">{t.findNote}</p>
+    </section>
+  );
+}
+
 // ---------- charts ----------
-function Scatter({ towns, metric, year, selected, onSelect }) {
+function Scatter({ towns, metric, year, selected, onSelect, lang, dimmed }) {
   const m = METRICS[metric];
+  const t = T[lang];
   const pts = towns
     .map((f) => f.properties)
     .filter((p) => p.min_to_sants != null && p[m.field(year)] != null)
     .map((p) => ({ id: p.muni5, name: p.name, x: p.min_to_sants, y: p[m.field(year)] }));
-  const W = 340, H = 220, L = 46, R = 12, T = 12, B = 34;
+  const W = 340, H = 220, L = 46, R = 12, T0 = 12, B = 34;
   const ys = pts.map((p) => p.y);
   let lo = Math.min(...ys), hi = Math.max(...ys);
   const pad = (hi - lo) * 0.12 || 1;
-  lo -= pad; hi += pad;
+  lo -= pad;
+  hi += pad;
   const X = (v) => L + (v / 60) * (W - L - R);
-  const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const Y = (v) => T0 + (1 - (v - lo) / (hi - lo)) * (H - T0 - B);
   const ticks = [0, 1, 2, 3].map((i) => lo + ((hi - lo) * (i + 0.5)) / 4);
-  const tickFmt = (v) => (metric === 'rti' ? v.toFixed(0) + '%' : metric === 'chg' ? '+' + v.toFixed(0) + '%' : metric === 'inc' ? '€' + Math.round(v / 1000) + 'k' : '€' + Math.round(v));
   const sel = pts.find((p) => p.id === selected);
   return (
     <figure className="chart">
       <figcaption>
-        {m.short}
-        {m.byYear ? `, ${year}` : ''}, against train time to Sants
+        {t.scatterTitle(t.metrics[metric].short + (m.byYear ? `, ${year}` : ''))}
       </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${m.short} against minutes to Barcelona-Sants`}>
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={L} x2={W - R} y1={Y(t)} y2={Y(t)} stroke={C.rule} />
-            <text x={L - 6} y={Y(t) + 3.5} textAnchor="end" className="ax">
-              {tickFmt(t)}
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.scatterTitle(t.metrics[metric].short)}>
+        {ticks.map((v) => (
+          <g key={v}>
+            <line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke={C.rule} />
+            <text x={L - 6} y={Y(v) + 3.5} textAnchor="end" className="ax">
+              {m.tick(v, lang)}
             </text>
           </g>
         ))}
-        {[0, 15, 30, 45, 60].map((t) => (
-          <text key={t} x={X(t)} y={H - B + 15} textAnchor="middle" className="ax">
-            {t}
+        {[0, 15, 30, 45, 60].map((v) => (
+          <text key={v} x={X(v)} y={H - B + 15} textAnchor="middle" className="ax">
+            {v}
           </text>
         ))}
         <text x={(L + W - R) / 2} y={H - 4} textAnchor="middle" className="ax">
-          minutes to Barcelona-Sants
+          {t.scatterAxis}
         </text>
         {pts.map((p) => (
           <circle
             key={p.id}
             cx={X(p.x)}
             cy={Y(p.y)}
-            r={p.id === selected ? 7 : 5.5}
+            r={p.id === selected ? 6.5 : 5}
             fill={colorFor(metric, p.y)}
-            stroke={p.id === selected ? C.ink : C.muted}
-            strokeWidth={p.id === selected ? 2 : 0.8}
+            fillOpacity={dimmed.has(p.id) ? 0.2 : 1}
+            stroke={p.id === selected ? C.ink : 'rgba(0,0,0,.25)'}
+            strokeOpacity={dimmed.has(p.id) ? 0.3 : 1}
+            strokeWidth={p.id === selected ? 1.6 : 0.6}
             className="dot"
             onClick={() => onSelect(p.id, null)}
           >
             <title>
-              {p.name}: {m.fmt(p.y)}, {p.x} min
+              {p.name}: {m.fmt(p.y, lang)}, {p.x} min
             </title>
           </circle>
         ))}
@@ -273,34 +446,39 @@ function Scatter({ towns, metric, year, selected, onSelect }) {
   );
 }
 
-function IndexChart({ p, year }) {
-  const W = 340, H = 150, L = 34, R = 78, T = 12, B = 24;
+function IndexChart({ p, year, lang }) {
+  const t = T[lang];
+  const W = 340, H = 150, L = 34, R = 84, T0 = 12, B = 24;
   const r = YEARS.map((y) => (p[`rent_${y}`] && p.rent_2015 ? (p[`rent_${y}`] / p.rent_2015) * 100 : null));
   const i = YEARS.map((y) => (p[`inc_${y}`] && p.inc_2015 ? (p[`inc_${y}`] / p.inc_2015) * 100 : null));
   const all = [...r, ...i].filter((v) => v != null);
   const lo = 95, hi = Math.max(180, Math.ceil(Math.max(...all) / 10) * 10);
   const X = (k) => L + (k / (YEARS.length - 1)) * (W - L - R);
-  const Y = (v) => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const Y = (v) => T0 + (1 - (v - lo) / (hi - lo)) * (H - T0 - B);
   const path = (a) => a.map((v, k) => (v == null ? '' : `${k === 0 || a[k - 1] == null ? 'M' : 'L'}${X(k)},${Y(v)}`)).join('');
   const k = YEARS.indexOf(year);
-  // keep the two end labels at least 13px apart, rent above income
   let yR = r[9] != null ? Y(r[9]) : 0, yI = i[9] != null ? Y(i[9]) : 0;
-  if (Math.abs(yI - yR) < 13) { const mid = (yR + yI) / 2, up = yR <= yI ? -1 : 1; yR = mid + 6.5 * up; yI = mid - 6.5 * up; }
+  if (Math.abs(yI - yR) < 13) {
+    const mid = (yR + yI) / 2, up = yR <= yI ? -1 : 1;
+    yR = mid + 6.5 * up;
+    yI = mid - 6.5 * up;
+  }
+  const pc = (v) => (lang === 'es' ? ` +${(v - 100).toFixed(0)}\u00a0%` : ` +${(v - 100).toFixed(0)}%`);
   return (
     <figure className="chart">
-      <figcaption>Rent and income since 2015 (2015 = 100)</figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Rent and household income growth since 2015">
-        {[100, 140, 180].filter((t) => t <= hi).map((t) => (
-          <g key={t}>
-            <line x1={L} x2={W - R} y1={Y(t)} y2={Y(t)} stroke={C.rule} />
-            <text x={L - 6} y={Y(t) + 3.5} textAnchor="end" className="ax">{t}</text>
+      <figcaption>{t.idxTitle}</figcaption>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={t.idxTitle}>
+        {[100, 140, 180].filter((v) => v <= hi).map((v) => (
+          <g key={v}>
+            <line x1={L} x2={W - R} y1={Y(v)} y2={Y(v)} stroke={C.rule} />
+            <text x={L - 6} y={Y(v) + 3.5} textAnchor="end" className="ax">{v}</text>
           </g>
         ))}
-        <line x1={X(k)} x2={X(k)} y1={T} y2={H - B} stroke={C.muted} strokeDasharray="3 3" />
-        <path d={path(i)} fill="none" stroke={C.muted} strokeWidth="2" />
-        <path d={path(r)} fill="none" stroke={C.accent} strokeWidth="2.5" />
-        {r[9] != null && <text x={X(9) + 6} y={yR + 4} className="end rent">Rent +{(r[9] - 100).toFixed(0)}%</text>}
-        {i[9] != null && <text x={X(9) + 6} y={yI + 4} className="end inc">Income +{(i[9] - 100).toFixed(0)}%</text>}
+        <line x1={X(k)} x2={X(k)} y1={T0} y2={H - B} stroke={C.muted} strokeDasharray="2 3" strokeWidth="0.8" />
+        <path d={path(i)} fill="none" stroke={C.muted} strokeWidth="1.5" />
+        <path d={path(r)} fill="none" stroke={C.accent} strokeWidth="2" />
+        {r[9] != null && <text x={X(9) + 6} y={yR + 4} className="end rent">{t.idxRent}{pc(r[9])}</text>}
+        {i[9] != null && <text x={X(9) + 6} y={yI + 4} className="end inc">{t.idxInc}{pc(i[9])}</text>}
         {[0, 9].map((q) => (
           <text key={q} x={X(q)} y={H - 6} textAnchor="middle" className="ax">{YEARS[q]}</text>
         ))}
@@ -309,55 +487,62 @@ function IndexChart({ p, year }) {
   );
 }
 
-// ---------- panel ----------
-function Panel({ data, metric, year, selected, station, onSelect }) {
-  const towns = data.towns.features;
-  const f = towns.find((t) => t.properties.muni5 === selected);
-  const sorted = [...towns].map((t) => t.properties).filter((p) => p[`rti_${year}`] != null).sort((a, b) => b[`rti_${year}`] - a[`rti_${year}`]);
+function MedianBlock({ p, lang }) {
+  const t = T[lang];
+  const W = 340, L = 130, R = 14, max = 2500;
+  const X = (v) => L + (Math.min(v, max) / max) * (W - L - R);
+  const rows = [
+    [t.apts, p.sv_apt, p.sv_apt_p25, p.sv_apt_p75, C.accent],
+    [t.houses, p.sv_house, p.sv_house_p25, p.sv_house_p75, C.ink],
+  ];
   return (
-    <aside className="panel">
-      <label className="picker">
-        <span className="sr">Choose a town</span>
-        <select value={selected || ''} onChange={(e) => onSelect(e.target.value || null, null)}>
-          <option value="">Choose a town…</option>
-          {[...towns]
-            .map((t) => t.properties)
-            .sort((a, b) => a.name.localeCompare(b.name, 'ca'))
-            .map((p) => (
-              <option key={p.muni5} value={p.muni5}>{p.name}</option>
-            ))}
-        </select>
-      </label>
-
-      {f ? (
-        <TownDetail p={f.properties} data={data} year={year} station={station} rank={sorted.findIndex((p) => p.muni5 === selected) + 1} total={sorted.length} />
-      ) : (
-        <Intro />
-      )}
-
-      <Scatter towns={towns} metric={metric} year={year} selected={selected} onSelect={onSelect} />
-    </aside>
+    <figure className="chart">
+      <figcaption>{t.medTitle}</figcaption>
+      <svg viewBox={`0 0 ${W} 78`} role="img" aria-label={`${t.medTitle}: ${t.apts} ${fmtEur(p.sv_apt, lang)}, ${t.houses} ${fmtEur(p.sv_house, lang)}`}>
+        {[0, 1000, 2000].map((v) => (
+          <g key={v}>
+            <line x1={X(v)} x2={X(v)} y1={4} y2={60} stroke={C.rule} />
+            <text x={X(v)} y={74} textAnchor="middle" className="ax">{fmtEur(v, lang)}</text>
+          </g>
+        ))}
+        {rows.map(([lab, med, lo, hi, col], i) => {
+          const y = 18 + i * 28;
+          return (
+            <g key={lab}>
+              <text x={0} y={y + 4} className="ax lab">{lab}</text>
+              <line x1={X(lo)} x2={X(hi)} y1={y} y2={y} stroke={col} strokeWidth="5" strokeLinecap="round" opacity="0.22" />
+              <circle cx={X(med)} cy={y} r="4.5" fill={col} />
+              <text x={L - 12} y={y + 4} textAnchor="end" className="ax val">{fmtEur(med, lang)}</text>
+            </g>
+          );
+        })}
+      </svg>
+      <p className="fine">{t.medNote(lang === 'es' ? p.sv_house_share.toFixed(0) : p.sv_house_share.toFixed(0), p.name)}</p>
+    </figure>
   );
 }
 
-function Intro() {
+// ---------- panel ----------
+function Intro({ lang }) {
+  const t = T[lang];
   return (
     <div className="intro">
-      <h3>Click a town or a station</h3>
-      <ul className="findings">
-        <li><b>Sitges spends the largest share of income on rent:</b> 28.7% in 2024, above Barcelona at 27.6%.</li>
-        <li><b>Sitges and Castelldefels rent for more than Barcelona,</b> at €1,306 and €1,163 a month against €1,147.</li>
-        <li><b>Rent rose faster than household income in all 13 towns</b> between 2015 and 2024.</li>
-      </ul>
-      <p className="caveat">
-        Rents are averages of new contracts registered with Incasòl. In towns with a high-end rental segment, such as Sitges and
-        Castelldefels, a small number of expensive contracts can raise the average.
-      </p>
+      <h2>{t.introTitle}</h2>
+      <ol className="findings">
+        {t.findings.map(([b, rest]) => (
+          <li key={b}>
+            <b>{b}</b>
+            {rest}
+          </li>
+        ))}
+      </ol>
+      <p className="fine">{t.caveat}</p>
     </div>
   );
 }
 
-function TownDetail({ p, data, year, station, rank, total }) {
+function TownDetail({ p, data, year, station, rank, total, lang }) {
+  const t = T[lang];
   const sts = data.stations.features.map((s) => s.properties).filter((s) => s.muni_code === p.muni5);
   const v = (k) => p[`${k}_${year}`];
   return (
@@ -369,90 +554,187 @@ function TownDetail({ p, data, year, station, rank, total }) {
           {sts.map((s) => (
             <li key={s.stop_id} className={s.stop_id === station ? 'on' : ''}>
               <b>{s.stop_name}</b>
-              <span>{s.stop_name === 'Barcelona-Sants' ? 'Destination station' : `${s.min_to_sants} min to Sants · ${s.trains_7_to_9am} trains 7 to 9am`}</span>
+              <span>{s.stop_name === 'Barcelona-Sants' ? t.destStation : t.stationLine(s.min_to_sants, s.trains_7_to_9am)}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="muted">No R2 Sud station in this municipality.</p>
+        <p className="muted small">{t.noStation}</p>
       )}
       <div className="stats">
-        <div><span>Rent, {year}</span><b>{v('rent') != null ? fmtEur(v('rent')) : 'n/a'}</b><em>a month</em></div>
-        <div><span>Household income</span><b>{v('inc') != null ? fmtEur(v('inc')) : 'n/a'}</b><em>a year, net</em></div>
-        <div><span>Rent-to-income</span><b>{v('rti') != null ? fmtPct(v('rti')) : 'n/a'}</b><em>{rank ? `${ordinal(rank)} of ${total}` : ''}</em></div>
+        <div>
+          <span>{t.rentY(year)}</span>
+          <b>{v('rent') != null ? fmtEur(v('rent'), lang) : 'n/a'}</b>
+          <em>{t.month}</em>
+        </div>
+        <div>
+          <span>{t.income}</span>
+          <b>{v('inc') != null ? fmtEur(v('inc'), lang) : 'n/a'}</b>
+          <em>{t.yearNet}</em>
+        </div>
+        <div>
+          <span>{t.rti}</span>
+          <b>{v('rti') != null ? fmtPct(v('rti'), 1, lang) : 'n/a'}</b>
+          <em>{rank ? t.rank(rank, total) : ''}</em>
+        </div>
       </div>
-      <IndexChart p={p} year={year} />
-      {p.rent_chg != null && p.inc_chg != null && (
-        <p className="muted small">
-          From 2015 to 2024, average rent in {p.name} rose {p.rent_chg.toFixed(0)}% and household income {p.inc_chg.toFixed(0)}%.
-        </p>
-      )}
+      {p.sv_apt != null && <MedianBlock p={p} lang={lang} />}
+      <IndexChart p={p} year={year} lang={lang} />
+      {p.rent_chg != null && p.inc_chg != null && <p className="fine">{t.since(p.name, p.rent_chg.toFixed(0), p.inc_chg.toFixed(0))}</p>}
     </div>
   );
 }
 
-const ordinal = (n) => (n === 1 ? 'Highest' : n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) || n % 10 > 3 ? 0 : n % 10]) + ' highest');
+function Panel({ data, metric, year, selected, station, onSelect, lang, find, setFind, matches, dimmed }) {
+  const t = T[lang];
+  const towns = data.towns.features;
+  const f = towns.find((x) => x.properties.muni5 === selected);
+  const sorted = [...towns].map((x) => x.properties).filter((p) => p[`rti_${year}`] != null).sort((a, b) => b[`rti_${year}`] - a[`rti_${year}`]);
+  return (
+    <aside className="panel">
+      <Finder towns={towns} find={find} setFind={setFind} matches={matches} onSelect={onSelect} selected={selected} lang={lang} />
+      <label className="picker">
+        <span className="sr">{t.chooseSr}</span>
+        <select value={selected || ''} onChange={(e) => onSelect(e.target.value || null, null)}>
+          <option value="">{t.choose}</option>
+          {[...towns]
+            .map((x) => x.properties)
+            .sort((a, b) => a.name.localeCompare(b.name, 'ca'))
+            .map((p) => (
+              <option key={p.muni5} value={p.muni5}>
+                {p.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      {f ? (
+        <TownDetail p={f.properties} data={data} year={year} station={station} lang={lang} rank={sorted.findIndex((p) => p.muni5 === selected) + 1} total={sorted.length} />
+      ) : (
+        <Intro lang={lang} />
+      )}
+      <Scatter towns={towns} metric={metric} year={year} selected={selected} onSelect={onSelect} lang={lang} dimmed={dimmed} />
+    </aside>
+  );
+}
 
 // ---------- app ----------
 export default function App() {
   const data = useData();
+  const [lang, setLang] = useState(initialLang);
   const [metric, setMetric] = useState('rti');
   const [year, setYear] = useState(2024);
   const [selected, setSelected] = useState(null);
   const [station, setStation] = useState(null);
+  const [find, setFind] = useState({ rent: FIND.rentMax, minutes: FIND.minMax, frequent: false });
+  const t = T[lang];
+  const m = METRICS[metric];
   const onSelect = (id, st) => {
     setSelected(id);
     setStation(st);
   };
-  const m = METRICS[metric];
+
+  useEffect(() => {
+    document.documentElement.lang = lang;
+    document.title = t.title;
+  }, [lang]);
+
+  const switchLang = (l) => {
+    setLang(l);
+    rememberLang(l);
+  };
+
+  const matches = useMemo(() => {
+    if (!data) return new Set();
+    return new Set(data.towns.features.map((f) => f.properties).filter((p) => fits(p, find)).map((p) => p.muni5));
+  }, [data, find]);
+  const filtering = find.rent < FIND.rentMax || find.minutes < FIND.minMax || find.frequent;
+  const dimmed = useMemo(() => {
+    if (!data || !filtering) return new Set();
+    return new Set(data.towns.features.map((f) => f.properties.muni5).filter((id) => !matches.has(id)));
+  }, [data, matches, filtering]);
 
   return (
     <div className="app">
       <header className="top">
-        <a className="brand" href="https://galeanoworks.com" aria-label="Galeano Works home">
-          <img src="./gW.png" alt="" width="40" height="40" />
-        </a>
-        <div className="titles">
-          <a className="back" href="../../destination-services.html">&larr; Destination services</a>
-          <div className="eyebrow">Coast Commuter Map · Rodalies R2 Sud</div>
-          <h1>What a commute to Barcelona costs along the coast</h1>
-          <p className="lede">Rent, household income and train time for the 13 towns from Sant Vicenç de Calders to Barcelona, 2015 to 2024.</p>
+        <div className="bar">
+          <a className="brand" href="https://galeanoworks.com" aria-label="Galeano Works">
+            <img src="./gW.png" alt="" width="36" height="36" />
+          </a>
+          <a className="back" href={t.backHref}>
+            {t.back}
+          </a>
+          <div className="lang" role="group" aria-label="Language">
+            <button type="button" aria-pressed={lang === 'en'} onClick={() => switchLang('en')}>
+              EN
+            </button>
+            <span aria-hidden="true">/</span>
+            <button type="button" aria-pressed={lang === 'es'} onClick={() => switchLang('es')}>
+              ES
+            </button>
+          </div>
         </div>
+        <div className="eyebrow">{t.eyebrow}</div>
+        <h1>{t.h1}</h1>
+        <p className="lede">{t.lede}</p>
+        <p className="why">
+          <b>{t.whyTitle}.</b> {t.why}
+        </p>
       </header>
 
       <div className="toolbar">
-        <div className="seg" role="group" aria-label="Measure">
-          {Object.entries(METRICS).map(([k, v]) => (
-            <button key={k} aria-pressed={metric === k} onClick={() => setMetric(k)}>{v.label}</button>
+        <div className="tabs" role="group" aria-label={t.measure}>
+          {Object.keys(METRICS).map((k) => (
+            <button key={k} type="button" aria-pressed={metric === k} onClick={() => setMetric(k)}>
+              {t.metrics[k].label}
+            </button>
           ))}
         </div>
         <label className={'year' + (m.byYear ? '' : ' off')}>
-          <span>Year</span>
+          <span>{t.year}</span>
           <input type="range" min={2015} max={2024} step={1} value={year} onChange={(e) => setYear(+e.target.value)} disabled={!m.byYear} />
-          <b>{m.byYear ? year : '2015–24'}</b>
+          <b>{m.byYear ? year : m.period}</b>
         </label>
       </div>
-      <p className="note">{m.note}</p>
+      <p className="note">{t.metrics[metric].note}</p>
 
       <main className="main">
         {data ? (
           <>
-            <MapView data={data} metric={metric} year={year} selected={selected} onSelect={onSelect} />
-            <Panel data={data} metric={metric} year={year} selected={selected} station={station} onSelect={onSelect} />
+            <MapView data={data} metric={metric} year={year} selected={selected} onSelect={onSelect} lang={lang} dimmed={dimmed} filtering={filtering} />
+            <Panel
+              data={data}
+              metric={metric}
+              year={year}
+              selected={selected}
+              station={station}
+              onSelect={onSelect}
+              lang={lang}
+              find={find}
+              setFind={setFind}
+              matches={matches}
+              dimmed={dimmed}
+            />
           </>
         ) : (
-          <div className="loading">Loading map…</div>
+          <div className="loading">{t.loading}</div>
         )}
       </main>
 
-      <footer className="foot">
-        <p>
-          Data: Generalitat de Catalunya, Incasòl rental bonds (annual average); INE household income atlas; Renfe GTFS (fastest weekday morning train arriving at Barcelona-Sants, November 2026); ICGC municipal boundaries.
-          Sant Pere de Ribes has no R2 Sud station. Rent and income are averages, so a small number of high-end rentals or
-          high-income households can raise them.
+      <section className="cta">
+        <p>{t.ctaText}</p>
+        <p className="cta-links">
+          <a href={t.ctaCallHref} target="_blank" rel="noopener">
+            {t.ctaCall}
+          </a>
+          <span aria-hidden="true">·</span>
+          <a href="mailto:sebastian@galeanoworks.com?subject=Coast%20Commuter%20Map">{t.ctaMail}</a>
         </p>
+      </section>
+
+      <footer className="foot">
+        <p>{t.foot}</p>
         <p className="credit">
-          <a href="https://galeanoworks.com">A Galeano Works study · galeanoworks.com</a>
+          <a href="https://galeanoworks.com">{t.credit}</a>
         </p>
       </footer>
     </div>

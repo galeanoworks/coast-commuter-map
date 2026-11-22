@@ -1,0 +1,23 @@
+{
+"type": "FeatureCollection",
+"name": "stations",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
+"xy_coordinate_resolution": 1e-05,
+"features": [
+{ "type": "Feature", "properties": { "stop_id": "71604", "stop_name": "Cubelles", "muni_code": "08074", "min_to_sants": 47, "trains_7_to_9am": 4.0 }, "geometry": { "type": "Point", "coordinates": [ 1.67598, 41.20432 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71603", "stop_name": "Cunit", "muni_code": "43051", "min_to_sants": 51, "trains_7_to_9am": 4.0 }, "geometry": { "type": "Point", "coordinates": [ 1.63194, 41.19504 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71701", "stop_name": "Sitges", "muni_code": "08270", "min_to_sants": 35, "trains_7_to_9am": 11.0 }, "geometry": { "type": "Point", "coordinates": [ 1.80969, 41.23913 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71700", "stop_name": "Vilanova i la Geltrú", "muni_code": "08307", "min_to_sants": 35, "trains_7_to_9am": 13.0 }, "geometry": { "type": "Point", "coordinates": [ 1.73077, 41.22032 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71704", "stop_name": "Platja de Castelldefels", "muni_code": "08056", "min_to_sants": 26, "trains_7_to_9am": 8.0 }, "geometry": { "type": "Point", "coordinates": [ 1.95714, 41.26698 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71703", "stop_name": "Garraf", "muni_code": "08270", "min_to_sants": 31, "trains_7_to_9am": 7.0 }, "geometry": { "type": "Point", "coordinates": [ 1.9025, 41.25459 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71706", "stop_name": "Gavà", "muni_code": "08089", "min_to_sants": 17, "trains_7_to_9am": 16.0 }, "geometry": { "type": "Point", "coordinates": [ 2.01053, 41.30347 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71705", "stop_name": "Castelldefels", "muni_code": "08056", "min_to_sants": 21, "trains_7_to_9am": 15.0 }, "geometry": { "type": "Point", "coordinates": [ 1.97915, 41.27905 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71708", "stop_name": "Bellvitge - Gornal", "muni_code": "08101", "min_to_sants": 6, "trains_7_to_9am": 15.0 }, "geometry": { "type": "Point", "coordinates": [ 2.11527, 41.35492 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71707", "stop_name": "El Prat de Llobregat", "muni_code": "08169", "min_to_sants": 11, "trains_7_to_9am": 15.0 }, "geometry": { "type": "Point", "coordinates": [ 2.08934, 41.33094 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71801", "stop_name": "Barcelona-Sants", "muni_code": "08019", "min_to_sants": 0, "trains_7_to_9am": null }, "geometry": { "type": "Point", "coordinates": [ 2.14102, 41.37986 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71600", "stop_name": "Sant Vicenç de Calders", "muni_code": "43163", "min_to_sants": 47, "trains_7_to_9am": 12.0 }, "geometry": { "type": "Point", "coordinates": [ 1.5248, 41.18621 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71709", "stop_name": "Viladecans", "muni_code": "08301", "min_to_sants": 15, "trains_7_to_9am": 15.0 }, "geometry": { "type": "Point", "coordinates": [ 2.02742, 41.30951 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71602", "stop_name": "Segur de Calafell", "muni_code": "43037", "min_to_sants": 54, "trains_7_to_9am": 4.0 }, "geometry": { "type": "Point", "coordinates": [ 1.60644, 41.19258 ] } },
+{ "type": "Feature", "properties": { "stop_id": "71601", "stop_name": "Calafell", "muni_code": "43037", "min_to_sants": 57, "trains_7_to_9am": 4.0 }, "geometry": { "type": "Point", "coordinates": [ 1.57501, 41.18967 ] } }
+]
+}

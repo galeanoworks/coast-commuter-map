@@ -25,10 +25,10 @@ const CAL = 'https://calendly.com/sebastian-galeanoworks';
 
 export const T = {
   en: {
-    title: 'Coast Commuter Map · Galeano Works',
+    title: 'Cost of a Commute | R2 Sud',
     back: '← Destination services',
     backHref: '../../destination-services.html',
-    eyebrow: 'Coast Commuter Map · Rodalies R2 Sud',
+    eyebrow: 'Cost of a Commute | R2 Sud',
     h1: 'What a commute to Barcelona costs along the coast',
     lede: 'Rent, household income and train time for the 13 towns along the Rodalies R2 Sud, from Sant Vicenç de Calders to Barcelona, 2015 to 2024.',
     measure: 'Measure',
@@ -101,14 +101,14 @@ export const T = {
     ctaMail: 'Email',
     foot:
       'Data: Generalitat de Catalunya, Incasòl rental bonds (annual average of new contracts); Ministry of Housing, SERPAVI (2022 medians from tax returns); INE household income atlas; Renfe GTFS (fastest weekday morning train arriving at Barcelona-Sants, November 2026); ICGC municipal boundaries. Sant Pere de Ribes has no R2 Sud station.',
-    credit: 'A Galeano Works study · galeanoworks.com',
+    credit: 'A gW study · galeanoworks.com',
     north: 'North',
   },
   es: {
-    title: 'Mapa R2 Sud · Galeano Works',
+    title: 'El coste del trayecto | R2 Sud',
     back: '← Servicios de destino',
     backHref: '../../destination-services.html#es',
-    eyebrow: 'Mapa R2 Sud · Rodalies',
+    eyebrow: 'El coste del trayecto | R2 Sud',
     h1: 'Lo que cuesta vivir en la costa y trabajar en Barcelona',
     lede: 'Alquiler, renta de los hogares y tiempo en tren en los 13 municipios a lo largo de la Rodalies R2 Sud, de Sant Vicenç de Calders a Barcelona, de 2015 a 2024.',
     measure: 'Indicador',
@@ -177,7 +177,7 @@ export const T = {
     ctaMail: 'Correo',
     foot:
       'Datos: Generalitat de Catalunya, fianzas de alquiler del Incasòl (media anual de contratos nuevos); Ministerio de Vivienda, SERPAVI (medianas de 2022 del IRPF); INE, Atlas de distribución de renta de los hogares; Renfe GTFS (tren más rápido de un día laborable por la mañana con llegada a Barcelona-Sants, noviembre de 2026); ICGC, límites municipales. Sant Pere de Ribes no tiene estación de la R2 Sud.',
-    credit: 'Un estudio de Galeano Works · galeanoworks.com',
+    credit: 'Un estudio de gW · galeanoworks.com',
     north: 'Norte',
   },
 };
